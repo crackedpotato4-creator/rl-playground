@@ -1,21 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RL Blocks</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>RL Blocks</h1>
-  <p>A visual reinforcement learning playground for students.</p>
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">RL Blocks</p>
+      <h1>Grid-World Learning Playground</h1>
+    </div>
+    <p class="intro">
+      Help the robot learn which moves lead to the goal. Try random moves first,
+      then train it and watch the learned path improve.
+    </p>
+  </header>
 
-  <button onclick="trainAgent()">Train Agent</button>
+  <main class="app-shell">
+    <section class="play-area" aria-label="Grid world simulation">
+      <div id="grid" class="grid" aria-label="5 by 5 grid-world board"></div>
+      <div class="legend" aria-label="Grid legend">
+        <span><b class="legend-swatch agent-swatch"></b> Robot</span>
+        <span><b class="legend-swatch goal-swatch"></b> Goal</span>
+        <span><b class="legend-swatch wall-swatch"></b> Wall</span>
+        <span><b class="legend-swatch empty-swatch"></b> Open</span>
+      </div>
+    </section>
 
-  <p id="output">Click the button to start training.</p>
+    <section class="control-panel" aria-label="Simulation controls and stats">
+      <div class="controls">
+        <button id="randomMoveBtn" type="button">Move Randomly</button>
+        <button id="runEpisodeBtn" type="button">Run Episode</button>
+        <button id="trainBtn" type="button">Train Agent</button>
+        <button id="resetBtn" type="button" class="secondary">Reset</button>
+      </div>
 
-  <script>
-    function trainAgent() {
-      document.getElementById("output").textContent =
-        "The agent is training... eventually this will run the RL simulation.";
-    }
-  </script>
+      <div class="stats" aria-label="Simulation stats">
+        <div>
+          <span>Episode</span>
+          <strong id="episodeStat">0</strong>
+        </div>
+        <div>
+          <span>Steps</span>
+          <strong id="stepsStat">0</strong>
+        </div>
+        <div>
+          <span>Total Reward</span>
+          <strong id="rewardStat">0.00</strong>
+        </div>
+      </div>
+
+      <p id="statusMessage" class="status" role="status">
+        Ready. Press Train Agent to teach the robot, or try random moves.
+      </p>
+
+      <div class="learning-box">
+        <h2>Best Learned Actions</h2>
+        <p>
+          Arrows appear after training. Each arrow shows the action the robot
+          currently thinks is best from that square.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
 </body>
 </html>
