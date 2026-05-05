@@ -19,6 +19,29 @@
   </header>
 
   <main class="app-shell">
+    <section class="editor-panel" aria-label="Grid editor tools">
+      <h2>Build the Grid</h2>
+      <p>
+        Drag a tool onto the grid, or select a tool and click a square.
+        Click a wall with the wall tool to remove it.
+      </p>
+
+      <div class="tool-list" aria-label="Draggable grid tools">
+        <button class="tool-button selected" type="button" draggable="true" data-tool="robot">
+          <span class="tool-icon robot-tool">R</span>
+          Robot
+        </button>
+        <button class="tool-button" type="button" draggable="true" data-tool="goal">
+          <span class="tool-icon goal-tool">G</span>
+          Goal
+        </button>
+        <button class="tool-button" type="button" draggable="true" data-tool="wall">
+          <span class="tool-icon wall-tool"></span>
+          Wall
+        </button>
+      </div>
+    </section>
+
     <section class="play-area" aria-label="Grid world simulation">
       <div id="grid" class="grid" aria-label="5 by 5 grid-world board"></div>
       <div class="legend" aria-label="Grid legend">
@@ -63,6 +86,30 @@
           currently thinks is best from that square.
         </p>
       </div>
+    </section>
+
+    <section class="qtable-panel" aria-label="Q-table values">
+      <details open>
+        <summary>Q-table</summary>
+        <p>
+          Each row is one grid cell. Q-values estimate how useful each action is
+          from that cell. Higher numbers are better.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>State</th>
+                <th>Up</th>
+                <th>Right</th>
+                <th>Down</th>
+                <th>Left</th>
+              </tr>
+            </thead>
+            <tbody id="qTableBody"></tbody>
+          </table>
+        </div>
+      </details>
     </section>
   </main>
 

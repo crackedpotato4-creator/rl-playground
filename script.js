@@ -1,15 +1,8 @@
-// RL Blocks MVP: a tiny grid-world with basic Q-learning.
-// The code is intentionally plain JavaScript so it can run on GitHub Pages.
+// RL Blocks MVP: editable grid-world with basic Q-learning.
+// This file uses plain JavaScript so the site works directly on GitHub Pages.
 
 const gridSize = 5;
-const startState = { row: 0, col: 0 };
-const goalState = { row: 4, col: 4 };
-const walls = [
-  { row: 1, col: 1 },
-  { row: 1, col: 3 },
-  { row: 2, col: 3 },
-  { row: 3, col: 1 }
-];
+const initialEpsilon = 0.25;
 
 const actions = [
   { name: "up", rowChange: -1, colChange: 0, arrow: "^" },
@@ -30,17 +23,22 @@ const rewards = {
 // epsilon: how often the robot explores instead of choosing its current best move.
 const alpha = 0.2;
 const gamma = 0.9;
-let epsilon = 0.25;
+let epsilon = initialEpsilon;
 
 let qTable = {};
-let agentState = { ...startState };
-let visitedStates = new Set([stateKey(agentState)]);
+let robotStartState = null;
+let goalState = null;
+let agentState = null;
+let walls = new Set();
+let visitedStates = new Set();
 let episode = 0;
 let steps = 0;
 let totalReward = 0;
+let selectedTool = "robot";
 let isAnimating = false;
 
 const gridElement = document.querySelector("#grid");
+const qTableBody = document.querySelector("#qTableBody");
 const episodeStat = document.querySelector("#episodeStat");
 const stepsStat = document.querySelector("#stepsStat");
 const rewardStat = document.querySelector("#rewardStat");
@@ -49,24 +47,43 @@ const randomMoveBtn = document.querySelector("#randomMoveBtn");
 const runEpisodeBtn = document.querySelector("#runEpisodeBtn");
 const trainBtn = document.querySelector("#trainBtn");
 const resetBtn = document.querySelector("#resetBtn");
+const toolButtons = document.querySelectorAll(".tool-button");
+
+toolButtons.forEach((button) => {
+  button.addEventListener("click", () => selectTool(button.dataset.tool));
+  button.addEventListener("dragstart", (event) => {
+    selectTool(button.dataset.tool);
+    event.dataTransfer.setData("text/plain", button.dataset.tool);
+  });
+});
 
 randomMoveBtn.addEventListener("click", moveRandomly);
 runEpisodeBtn.addEventListener("click", runBestEpisode);
 trainBtn.addEventListener("click", trainAgent);
-resetBtn.addEventListener("click", resetSimulation);
+resetBtn.addEventListener("click", resetLearning);
 
 render();
+setStatus("Place both the robot and goal before training.", "warning");
 
 function stateKey(state) {
   return `${state.row},${state.col}`;
 }
 
+function stateLabel(state) {
+  return `row ${state.row + 1}, col ${state.col + 1}`;
+}
+
 function sameState(first, second) {
-  return first.row === second.row && first.col === second.col;
+  return Boolean(
+    first &&
+    second &&
+    first.row === second.row &&
+    first.col === second.col
+  );
 }
 
 function isWall(state) {
-  return walls.some((wall) => sameState(wall, state));
+  return walls.has(stateKey(state));
 }
 
 function isInsideGrid(state) {
@@ -82,14 +99,33 @@ function isTerminalState(state) {
   return sameState(state, goalState);
 }
 
+function getAllStates() {
+  const states = [];
+
+  for (let row = 0; row < gridSize; row += 1) {
+    for (let col = 0; col < gridSize; col += 1) {
+      states.push({ row, col });
+    }
+  }
+
+  return states;
+}
+
+function getQValues(state) {
+  const key = stateKey(state);
+
+  if (qTable[key]) {
+    return qTable[key];
+  }
+
+  return { up: 0, right: 0, down: 0, left: 0 };
+}
+
 function ensureQValues(state) {
   const key = stateKey(state);
 
   if (!qTable[key]) {
-    qTable[key] = {};
-    actions.forEach((action) => {
-      qTable[key][action.name] = 0;
-    });
+    qTable[key] = { up: 0, right: 0, down: 0, left: 0 };
   }
 
   return qTable[key];
@@ -100,12 +136,16 @@ function chooseRandomAction() {
   return actions[randomIndex];
 }
 
-function chooseBestAction(state) {
-  const qValues = ensureQValues(state);
+function chooseBestAction(state, useRandomTieBreak = true) {
+  const qValues = getQValues(state);
   const highestValue = Math.max(...actions.map((action) => qValues[action.name]));
   const bestActions = actions.filter((action) => qValues[action.name] === highestValue);
 
-  return bestActions[Math.floor(Math.random() * bestActions.length)];
+  if (useRandomTieBreak) {
+    return bestActions[Math.floor(Math.random() * bestActions.length)];
+  }
+
+  return bestActions[0];
 }
 
 function chooseEpsilonGreedyAction(state) {
@@ -182,7 +222,7 @@ function applyMove(action, shouldLearn) {
 }
 
 function moveRandomly() {
-  if (isAnimating) {
+  if (isAnimating || !isGridReady()) {
     return;
   }
 
@@ -198,17 +238,17 @@ function startNewEpisode() {
   episode += 1;
   steps = 0;
   totalReward = 0;
-  agentState = { ...startState };
+  agentState = { ...robotStartState };
   visitedStates = new Set([stateKey(agentState)]);
 }
 
 async function runBestEpisode() {
-  if (isAnimating) {
+  if (isAnimating || !isGridReady()) {
     return;
   }
 
   isAnimating = true;
-  setButtonsDisabled(true);
+  updateControls();
   startNewEpisode();
   setStatus("Following the best learned path...", "");
   render();
@@ -232,23 +272,23 @@ async function runBestEpisode() {
   }
 
   isAnimating = false;
-  setButtonsDisabled(false);
+  updateControls();
 }
 
 async function trainAgent() {
-  if (isAnimating) {
+  if (isAnimating || !isGridReady()) {
     return;
   }
 
   isAnimating = true;
-  setButtonsDisabled(true);
+  updateControls();
   setStatus("Training for 400 practice episodes...", "");
 
   const trainingEpisodes = 400;
   const maxStepsPerEpisode = 60;
 
   for (let i = 0; i < trainingEpisodes; i += 1) {
-    let trainingState = { ...startState };
+    let trainingState = { ...robotStartState };
 
     for (let step = 0; step < maxStepsPerEpisode; step += 1) {
       const action = chooseEpsilonGreedyAction(trainingState);
@@ -270,87 +310,276 @@ async function trainAgent() {
   render();
 
   isAnimating = false;
-  setButtonsDisabled(false);
+  updateControls();
 }
 
-function resetSimulation() {
+function selectTool(tool) {
+  selectedTool = tool;
+
+  toolButtons.forEach((button) => {
+    button.classList.toggle("selected", button.dataset.tool === tool);
+  });
+}
+
+function placeToolOnCell(tool, state) {
+  if (isAnimating) {
+    return;
+  }
+
+  if (tool === "robot") {
+    if (isWall(state) || sameState(state, goalState)) {
+      setStatus("Robot cannot be placed on a wall or the goal.", "warning");
+      return;
+    }
+
+    robotStartState = { ...state };
+    agentState = { ...state };
+    clearLearningAfterGridChange();
+    return;
+  }
+
+  if (tool === "goal") {
+    if (isWall(state) || sameState(state, robotStartState)) {
+      setStatus("Goal cannot be placed on a wall or the robot.", "warning");
+      return;
+    }
+
+    goalState = { ...state };
+    clearLearningAfterGridChange();
+    return;
+  }
+
+  if (tool === "wall") {
+    if (sameState(state, robotStartState) || sameState(state, goalState)) {
+      setStatus("Walls cannot be placed on the robot or goal.", "warning");
+      return;
+    }
+
+    const key = stateKey(state);
+
+    if (walls.has(key)) {
+      walls.delete(key);
+    } else {
+      walls.add(key);
+    }
+
+    clearLearningAfterGridChange();
+  }
+}
+
+function clearLearningAfterGridChange() {
   qTable = {};
   episode = 0;
-  epsilon = 0.25;
-  agentState = { ...startState };
-  visitedStates = new Set([stateKey(agentState)]);
+  epsilon = initialEpsilon;
   resetEpisodeStatsOnly();
-  setStatus("Reset complete. The robot is ready to learn again.", "");
+  setStatus("Grid changed. Train the agent again.", "");
+  render();
+}
+
+function resetLearning() {
+  qTable = {};
+  episode = 0;
+  epsilon = initialEpsilon;
+  resetEpisodeStatsOnly();
+  setStatus("Learning reset. The grid stayed the same.", "");
   render();
 }
 
 function resetEpisodeStatsOnly() {
   steps = 0;
   totalReward = 0;
-  agentState = { ...startState };
-  visitedStates = new Set([stateKey(agentState)]);
+
+  if (robotStartState) {
+    agentState = { ...robotStartState };
+    visitedStates = new Set([stateKey(agentState)]);
+  } else {
+    agentState = null;
+    visitedStates = new Set();
+  }
+}
+
+function isGridReady() {
+  const validation = getGridValidation();
+  return validation.ready;
+}
+
+function getGridValidation() {
+  if (!robotStartState || !goalState) {
+    return {
+      ready: false,
+      message: "Place both the robot and goal before training."
+    };
+  }
+
+  if (!hasPathFromRobotToGoal()) {
+    return {
+      ready: false,
+      message: "No possible path exists. Move or erase walls so the robot can reach the goal."
+    };
+  }
+
+  return {
+    ready: true,
+    message: ""
+  };
+}
+
+function hasPathFromRobotToGoal() {
+  const queue = [{ ...robotStartState }];
+  const seen = new Set([stateKey(robotStartState)]);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (sameState(current, goalState)) {
+      return true;
+    }
+
+    actions.forEach((action) => {
+      const nextState = {
+        row: current.row + action.rowChange,
+        col: current.col + action.colChange
+      };
+      const nextKey = stateKey(nextState);
+
+      if (
+        isInsideGrid(nextState) &&
+        !isWall(nextState) &&
+        !seen.has(nextKey)
+      ) {
+        seen.add(nextKey);
+        queue.push(nextState);
+      }
+    });
+  }
+
+  return false;
 }
 
 function render() {
   gridElement.innerHTML = "";
 
-  for (let row = 0; row < gridSize; row += 1) {
-    for (let col = 0; col < gridSize; col += 1) {
-      const cellState = { row, col };
-      const cell = document.createElement("div");
-      cell.className = "cell";
+  getAllStates().forEach((cellState) => {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.dataset.row = cellState.row;
+    cell.dataset.col = cellState.col;
 
-      if (visitedStates.has(stateKey(cellState))) {
-        cell.classList.add("visited");
-      }
+    cell.addEventListener("click", () => placeToolOnCell(selectedTool, cellState));
+    cell.addEventListener("dragover", (event) => event.preventDefault());
+    cell.addEventListener("dragenter", () => cell.classList.add("drop-target"));
+    cell.addEventListener("dragleave", () => cell.classList.remove("drop-target"));
+    cell.addEventListener("drop", (event) => {
+      event.preventDefault();
+      cell.classList.remove("drop-target");
+      placeToolOnCell(event.dataTransfer.getData("text/plain") || selectedTool, cellState);
+    });
 
-      if (isWall(cellState)) {
-        cell.classList.add("wall");
-      }
-
-      if (sameState(cellState, goalState)) {
-        cell.classList.add("goal");
-        cell.textContent = "G";
-      }
-
-      if (!isWall(cellState) && !isTerminalState(cellState)) {
-        const bestAction = chooseBestAction(cellState);
-        const hasLearnedValue = Object.values(ensureQValues(cellState)).some((value) => value !== 0);
-
-        if (hasLearnedValue) {
-          const arrow = document.createElement("span");
-          arrow.className = "policy-arrow";
-          arrow.textContent = bestAction.arrow;
-          cell.appendChild(arrow);
-        }
-      }
-
-      if (sameState(cellState, agentState)) {
-        const agent = document.createElement("span");
-        agent.className = "agent-token";
-        agent.textContent = "R";
-        cell.appendChild(agent);
-      }
-
-      gridElement.appendChild(cell);
+    if (visitedStates.has(stateKey(cellState))) {
+      cell.classList.add("visited");
     }
-  }
+
+    if (isWall(cellState)) {
+      cell.classList.add("wall");
+    }
+
+    if (sameState(cellState, goalState)) {
+      cell.classList.add("goal");
+      cell.textContent = "G";
+    }
+
+    if (!isWall(cellState) && !isTerminalState(cellState)) {
+      const qValues = getQValues(cellState);
+      const hasLearnedValue = Object.values(qValues).some((value) => value !== 0);
+
+      if (hasLearnedValue) {
+        const bestAction = chooseBestAction(cellState, false);
+        const arrow = document.createElement("span");
+        arrow.className = "policy-arrow";
+        arrow.textContent = bestAction.arrow;
+        cell.appendChild(arrow);
+      }
+    }
+
+    if (sameState(cellState, agentState)) {
+      const agent = document.createElement("span");
+      agent.className = "agent-token";
+      agent.textContent = "R";
+      cell.appendChild(agent);
+    }
+
+    gridElement.appendChild(cell);
+  });
 
   episodeStat.textContent = episode;
   stepsStat.textContent = steps;
   rewardStat.textContent = totalReward.toFixed(2);
+  renderQTable();
+  updateControls();
+}
+
+function renderQTable() {
+  qTableBody.innerHTML = "";
+
+  getAllStates().forEach((state) => {
+    const row = document.createElement("tr");
+    const qValues = getQValues(state);
+
+    if (isWall(state)) {
+      row.classList.add("wall-row");
+    }
+
+    row.appendChild(makeTableCell(getStateDescription(state)));
+
+    actions.forEach((action) => {
+      row.appendChild(makeTableCell(qValues[action.name].toFixed(2)));
+    });
+
+    qTableBody.appendChild(row);
+  });
+}
+
+function getStateDescription(state) {
+  const parts = [stateLabel(state)];
+
+  if (sameState(state, robotStartState)) {
+    parts.push("robot start");
+  }
+
+  if (sameState(state, goalState)) {
+    parts.push("goal");
+  }
+
+  if (isWall(state)) {
+    parts.push("wall");
+  }
+
+  return parts.join(" - ");
+}
+
+function makeTableCell(text) {
+  const cell = document.createElement("td");
+  cell.textContent = text;
+  return cell;
+}
+
+function updateControls() {
+  const validation = getGridValidation();
+  const disabledBecauseInvalid = !validation.ready;
+
+  randomMoveBtn.disabled = isAnimating || disabledBecauseInvalid;
+  runEpisodeBtn.disabled = isAnimating || disabledBecauseInvalid;
+  trainBtn.disabled = isAnimating || disabledBecauseInvalid;
+  resetBtn.disabled = isAnimating;
+
+  if (!isAnimating && disabledBecauseInvalid) {
+    setStatus(validation.message, "warning");
+  }
 }
 
 function setStatus(message, type) {
   statusMessage.textContent = message;
   statusMessage.className = `status ${type}`.trim();
-}
-
-function setButtonsDisabled(disabled) {
-  randomMoveBtn.disabled = disabled;
-  runEpisodeBtn.disabled = disabled;
-  trainBtn.disabled = disabled;
-  resetBtn.disabled = disabled;
 }
 
 function wait(milliseconds) {
