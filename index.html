@@ -26,6 +26,19 @@
         Click a wall with the wall tool to remove it.
       </p>
 
+      <label class="field-label" for="gridSizeInput">
+        Grid size
+        <select id="gridSizeInput">
+          <option value="3">3x3</option>
+          <option value="4">4x4</option>
+          <option value="5" selected>5x5</option>
+          <option value="6">6x6</option>
+          <option value="7">7x7</option>
+          <option value="8">8x8</option>
+          <option value="9">9x9</option>
+        </select>
+      </label>
+
       <div class="tool-list" aria-label="Draggable grid tools">
         <button class="tool-button selected" type="button" draggable="true" data-tool="robot" aria-pressed="true">
           <span class="tool-icon robot-tool">R</span>
@@ -56,6 +69,13 @@
       <div class="controls">
         <button id="randomMoveBtn" type="button">Move Randomly</button>
         <button id="runEpisodeBtn" type="button">Run Episode</button>
+        <div class="training-settings">
+          <label class="field-label" for="trainingEpisodesInput">
+            Training episodes
+            <input id="trainingEpisodesInput" type="number" min="1" max="10000" value="400">
+          </label>
+          <p>One episode is one practice attempt from the robot’s start position.</p>
+        </div>
         <button id="trainBtn" type="button">Train Agent</button>
         <button id="resetBtn" type="button" class="secondary">Reset</button>
         <button id="clearGridBtn" type="button" class="secondary">Clear Grid</button>
@@ -79,6 +99,13 @@
       <p id="statusMessage" class="status" role="status">
         Ready. Press Train Agent to teach the robot, or try random moves.
       </p>
+
+      <div class="training-results" aria-label="Training results">
+        <h2>Training Results</h2>
+        <ul id="trainingResultsList">
+          <li>No training run yet.</li>
+        </ul>
+      </div>
 
       <div class="learning-box">
         <h2>Best Learned Actions</h2>

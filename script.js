@@ -1,8 +1,10 @@
 // RL Blocks MVP: editable grid-world with basic Q-learning.
 // This file uses plain JavaScript so the site works directly on GitHub Pages.
 
-const gridSize = 5;
+let gridSize = 5;
 const initialEpsilon = 0.25;
+const defaultTrainingEpisodes = 400;
+const maxTrainingEpisodes = 10000;
 const dragToolType = "application/x-rl-blocks-tool";
 
 const actions = [
@@ -37,9 +39,13 @@ let steps = 0;
 let totalReward = 0;
 let selectedTool = "robot";
 let isAnimating = false;
+let trainingResults = null;
 
 const gridElement = document.querySelector("#grid");
 const qTableBody = document.querySelector("#qTableBody");
+const gridSizeInput = document.querySelector("#gridSizeInput");
+const trainingEpisodesInput = document.querySelector("#trainingEpisodesInput");
+const trainingResultsList = document.querySelector("#trainingResultsList");
 const episodeStat = document.querySelector("#episodeStat");
 const stepsStat = document.querySelector("#stepsStat");
 const rewardStat = document.querySelector("#rewardStat");
@@ -66,6 +72,7 @@ runEpisodeBtn.addEventListener("click", runBestEpisode);
 trainBtn.addEventListener("click", trainAgent);
 resetBtn.addEventListener("click", resetLearning);
 clearGridBtn.addEventListener("click", clearGrid);
+gridSizeInput.addEventListener("change", changeGridSize);
 
 render();
 setStatus("Place a robot and goal to begin.", "warning");
@@ -258,7 +265,9 @@ async function runBestEpisode() {
   setStatus("Following the best learned path...", "");
   render();
 
-  for (let i = 0; i < 30; i += 1) {
+  const maxRunSteps = Math.max(30, gridSize * gridSize * 4);
+
+  for (let i = 0; i < maxRunSteps; i += 1) {
     if (isTerminalState(agentState)) {
       break;
     }
@@ -285,12 +294,23 @@ async function trainAgent() {
     return;
   }
 
+  const episodeSettings = getTrainingEpisodeCount();
+  const trainingEpisodes = episodeSettings.count;
+  const maxStepsPerEpisode = Math.max(60, gridSize * gridSize * 4);
+  const results = {
+    episodesRun: trainingEpisodes,
+    firstSolvedEpisode: null,
+    successfulEpisodes: 0,
+    bestPathLength: null,
+    finalEpsilon: epsilon
+  };
+
   isAnimating = true;
   updateControls();
-  setStatus("Training for 400 practice episodes...", "");
-
-  const trainingEpisodes = 400;
-  const maxStepsPerEpisode = 60;
+  setStatus(
+    episodeSettings.message || `Training for ${trainingEpisodes} practice episodes...`,
+    episodeSettings.message ? "warning" : ""
+  );
 
   for (let i = 0; i < trainingEpisodes; i += 1) {
     let trainingState = { ...robotStartState };
@@ -303,6 +323,19 @@ async function trainAgent() {
       trainingState = result.nextState;
 
       if (result.reachedGoal) {
+        const solvedEpisodeNumber = i + 1;
+        const pathLength = step + 1;
+
+        results.successfulEpisodes += 1;
+
+        if (results.firstSolvedEpisode === null) {
+          results.firstSolvedEpisode = solvedEpisodeNumber;
+        }
+
+        if (results.bestPathLength === null || pathLength < results.bestPathLength) {
+          results.bestPathLength = pathLength;
+        }
+
         break;
       }
     }
@@ -311,11 +344,38 @@ async function trainAgent() {
   episode += trainingEpisodes;
   resetEpisodeStatsOnly();
   epsilon = Math.max(0.05, epsilon * 0.9);
+  results.finalEpsilon = epsilon;
+  trainingResults = results;
   setStatus("Training complete. Press Run Episode to watch the learned path.", "success");
   render();
 
   isAnimating = false;
   updateControls();
+}
+
+function getTrainingEpisodeCount() {
+  const requestedEpisodes = Number.parseInt(trainingEpisodesInput.value, 10);
+
+  if (Number.isNaN(requestedEpisodes) || requestedEpisodes < 1) {
+    trainingEpisodesInput.value = defaultTrainingEpisodes;
+    return {
+      count: defaultTrainingEpisodes,
+      message: `Invalid episode count. Using ${defaultTrainingEpisodes} episodes.`
+    };
+  }
+
+  if (requestedEpisodes > maxTrainingEpisodes) {
+    trainingEpisodesInput.value = maxTrainingEpisodes;
+    return {
+      count: maxTrainingEpisodes,
+      message: `Episode count capped at ${maxTrainingEpisodes}.`
+    };
+  }
+
+  return {
+    count: requestedEpisodes,
+    message: ""
+  };
 }
 
 function selectTool(tool) {
@@ -378,18 +438,20 @@ function clearLearningAfterGridChange() {
   qTable = {};
   episode = 0;
   epsilon = initialEpsilon;
+  trainingResults = null;
   resetEpisodeStatsOnly();
-  setStatus("Grid changed. Train the agent again.", "");
   render();
+  setStatus("Grid changed. Train the agent again.", "");
 }
 
 function resetLearning() {
   qTable = {};
   episode = 0;
   epsilon = initialEpsilon;
+  trainingResults = null;
   resetEpisodeStatsOnly();
-  setStatus("Learning reset. The grid stayed the same.", "");
   render();
+  setStatus("Learning reset. The grid stayed the same.", "");
 }
 
 function clearGrid() {
@@ -400,9 +462,25 @@ function clearGrid() {
   qTable = {};
   episode = 0;
   epsilon = initialEpsilon;
+  trainingResults = null;
   resetEpisodeStatsOnly();
-  setStatus("Grid cleared. Place a robot and goal to begin.", "warning");
   render();
+  setStatus("Grid cleared. Place a robot and goal to begin.", "warning");
+}
+
+function changeGridSize() {
+  gridSize = Number.parseInt(gridSizeInput.value, 10);
+  robotStartState = null;
+  goalState = null;
+  agentState = null;
+  walls = new Set();
+  qTable = {};
+  episode = 0;
+  epsilon = initialEpsilon;
+  trainingResults = null;
+  resetEpisodeStatsOnly();
+  render();
+  setStatus("Grid size changed. Place a robot and goal to begin.", "warning");
 }
 
 function resetEpisodeStatsOnly() {
@@ -478,6 +556,8 @@ function hasPathFromRobotToGoal() {
 
 function render() {
   gridElement.innerHTML = "";
+  gridElement.style.setProperty("--grid-size", gridSize);
+  gridElement.setAttribute("aria-label", `${gridSize} by ${gridSize} grid-world board`);
 
   getAllStates().forEach((cellState) => {
     const cell = document.createElement("div");
@@ -543,6 +623,7 @@ function render() {
   stepsStat.textContent = steps;
   rewardStat.textContent = totalReward.toFixed(2);
   renderQTable();
+  renderTrainingResults();
   updateControls();
 }
 
@@ -567,6 +648,45 @@ function renderQTable() {
   });
 }
 
+function renderTrainingResults() {
+  trainingResultsList.innerHTML = "";
+
+  if (!trainingResults) {
+    trainingResultsList.appendChild(makeListItem("No training run yet."));
+    return;
+  }
+
+  trainingResultsList.appendChild(
+    makeListItem(`Episodes run: ${trainingResults.episodesRun}`)
+  );
+
+  if (trainingResults.firstSolvedEpisode === null) {
+    trainingResultsList.appendChild(makeListItem("Not solved during this training run."));
+  } else {
+    trainingResultsList.appendChild(
+      makeListItem(`First solved on episode: ${trainingResults.firstSolvedEpisode}`)
+    );
+  }
+
+  trainingResultsList.appendChild(
+    makeListItem(
+      `Successful episodes: ${trainingResults.successfulEpisodes} of ${trainingResults.episodesRun}`
+    )
+  );
+
+  if (trainingResults.bestPathLength === null) {
+    trainingResultsList.appendChild(makeListItem("Best path length: none yet"));
+  } else {
+    trainingResultsList.appendChild(
+      makeListItem(`Best path length: ${trainingResults.bestPathLength} steps`)
+    );
+  }
+
+  trainingResultsList.appendChild(
+    makeListItem(`Final epsilon: ${trainingResults.finalEpsilon.toFixed(2)}`)
+  );
+}
+
 function getStateDescription(state) {
   const parts = [stateLabel(state)];
 
@@ -589,6 +709,12 @@ function makeTableCell(text) {
   const cell = document.createElement("td");
   cell.textContent = text;
   return cell;
+}
+
+function makeListItem(text) {
+  const item = document.createElement("li");
+  item.textContent = text;
+  return item;
 }
 
 function updateControls() {

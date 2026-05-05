@@ -12,6 +12,7 @@
   --open-cell: #ffffff;
   --visited: #e0ecff;
   --danger: #dc2626;
+  --grid-size: 5;
 }
 
 * {
@@ -95,6 +96,27 @@ h2 {
   line-height: 1.45;
 }
 
+.field-label {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+select,
+input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+}
+
 .tool-list {
   display: grid;
   gap: 10px;
@@ -162,7 +184,7 @@ h2 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(48px, 1fr));
+  grid-template-columns: repeat(var(--grid-size), minmax(34px, 1fr));
   gap: 8px;
   width: min(100%, 560px);
   margin: 0 auto;
@@ -334,13 +356,37 @@ button.secondary:hover {
 }
 
 .status,
-.learning-box {
+.learning-box,
+.training-settings,
+.training-results {
   margin: 0;
   padding: 14px;
   border-radius: 8px;
   background: #f8fafc;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.training-settings .field-label {
+  margin-bottom: 8px;
+}
+
+.training-settings p {
+  margin-bottom: 0;
+  font-size: 0.92rem;
+}
+
+.training-results h2 {
+  margin-bottom: 8px;
+}
+
+.training-results ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.training-results li + li {
+  margin-top: 5px;
 }
 
 .status.success {
@@ -448,7 +494,7 @@ tr.wall-row td {
 
   .grid {
     gap: 5px;
-    grid-template-columns: repeat(5, minmax(42px, 1fr));
+    grid-template-columns: repeat(var(--grid-size), minmax(26px, 1fr));
   }
 
   .stats {
