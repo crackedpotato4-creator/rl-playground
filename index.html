@@ -27,15 +27,15 @@
       </p>
 
       <div class="tool-list" aria-label="Draggable grid tools">
-        <button class="tool-button selected" type="button" draggable="true" data-tool="robot">
+        <button class="tool-button selected" type="button" draggable="true" data-tool="robot" aria-pressed="true">
           <span class="tool-icon robot-tool">R</span>
           Robot
         </button>
-        <button class="tool-button" type="button" draggable="true" data-tool="goal">
+        <button class="tool-button" type="button" draggable="true" data-tool="goal" aria-pressed="false">
           <span class="tool-icon goal-tool">G</span>
           Goal
         </button>
-        <button class="tool-button" type="button" draggable="true" data-tool="wall">
+        <button class="tool-button" type="button" draggable="true" data-tool="wall" aria-pressed="false">
           <span class="tool-icon wall-tool"></span>
           Wall
         </button>
@@ -58,6 +58,7 @@
         <button id="runEpisodeBtn" type="button">Run Episode</button>
         <button id="trainBtn" type="button">Train Agent</button>
         <button id="resetBtn" type="button" class="secondary">Reset</button>
+        <button id="clearGridBtn" type="button" class="secondary">Clear Grid</button>
       </div>
 
       <div class="stats" aria-label="Simulation stats">

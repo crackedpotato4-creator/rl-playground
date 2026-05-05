@@ -105,12 +105,14 @@ h2 {
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  min-height: 48px;
-  padding: 8px 10px;
+  min-height: 58px;
+  padding: 10px;
   background: #f8fafc;
   color: var(--text);
   border: 2px solid var(--line);
   text-align: left;
+  cursor: grab;
+  user-select: none;
 }
 
 .tool-button:hover,
@@ -120,25 +122,37 @@ h2 {
   color: var(--primary-dark);
 }
 
+.tool-button:active {
+  cursor: grabbing;
+}
+
 .tool-icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
   color: #ffffff;
   font-weight: 700;
+  pointer-events: none;
 }
 
 .robot-tool {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   background: var(--agent);
+  box-shadow: 0 7px 14px rgba(47, 128, 237, 0.3);
 }
 
 .goal-tool {
-  background: var(--goal);
+  border: 2px solid var(--goal);
+  border-radius: 8px;
+  background: #dcfce7;
+  color: var(--goal);
 }
 
 .wall-tool {
+  border-radius: 8px;
   background: var(--wall);
 }
 

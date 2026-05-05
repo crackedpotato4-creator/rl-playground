@@ -3,6 +3,7 @@
 
 const gridSize = 5;
 const initialEpsilon = 0.25;
+const dragToolType = "application/x-rl-blocks-tool";
 
 const actions = [
   { name: "up", rowChange: -1, colChange: 0, arrow: "^" },
@@ -47,12 +48,15 @@ const randomMoveBtn = document.querySelector("#randomMoveBtn");
 const runEpisodeBtn = document.querySelector("#runEpisodeBtn");
 const trainBtn = document.querySelector("#trainBtn");
 const resetBtn = document.querySelector("#resetBtn");
+const clearGridBtn = document.querySelector("#clearGridBtn");
 const toolButtons = document.querySelectorAll(".tool-button");
 
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => selectTool(button.dataset.tool));
   button.addEventListener("dragstart", (event) => {
     selectTool(button.dataset.tool);
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(dragToolType, button.dataset.tool);
     event.dataTransfer.setData("text/plain", button.dataset.tool);
   });
 });
@@ -61,9 +65,10 @@ randomMoveBtn.addEventListener("click", moveRandomly);
 runEpisodeBtn.addEventListener("click", runBestEpisode);
 trainBtn.addEventListener("click", trainAgent);
 resetBtn.addEventListener("click", resetLearning);
+clearGridBtn.addEventListener("click", clearGrid);
 
 render();
-setStatus("Place both the robot and goal before training.", "warning");
+setStatus("Place a robot and goal to begin.", "warning");
 
 function stateKey(state) {
   return `${state.row},${state.col}`;
@@ -317,7 +322,9 @@ function selectTool(tool) {
   selectedTool = tool;
 
   toolButtons.forEach((button) => {
-    button.classList.toggle("selected", button.dataset.tool === tool);
+    const isSelected = button.dataset.tool === tool;
+    button.classList.toggle("selected", isSelected);
+    button.setAttribute("aria-pressed", String(isSelected));
   });
 }
 
@@ -385,6 +392,19 @@ function resetLearning() {
   render();
 }
 
+function clearGrid() {
+  robotStartState = null;
+  goalState = null;
+  agentState = null;
+  walls = new Set();
+  qTable = {};
+  episode = 0;
+  epsilon = initialEpsilon;
+  resetEpisodeStatsOnly();
+  setStatus("Grid cleared. Place a robot and goal to begin.", "warning");
+  render();
+}
+
 function resetEpisodeStatsOnly() {
   steps = 0;
   totalReward = 0;
@@ -407,7 +427,7 @@ function getGridValidation() {
   if (!robotStartState || !goalState) {
     return {
       ready: false,
-      message: "Place both the robot and goal before training."
+      message: "Place a robot and goal to begin."
     };
   }
 
@@ -466,13 +486,21 @@ function render() {
     cell.dataset.col = cellState.col;
 
     cell.addEventListener("click", () => placeToolOnCell(selectedTool, cellState));
-    cell.addEventListener("dragover", (event) => event.preventDefault());
+    cell.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    });
     cell.addEventListener("dragenter", () => cell.classList.add("drop-target"));
     cell.addEventListener("dragleave", () => cell.classList.remove("drop-target"));
     cell.addEventListener("drop", (event) => {
       event.preventDefault();
       cell.classList.remove("drop-target");
-      placeToolOnCell(event.dataTransfer.getData("text/plain") || selectedTool, cellState);
+      const droppedTool =
+        event.dataTransfer.getData(dragToolType) ||
+        event.dataTransfer.getData("text/plain") ||
+        selectedTool;
+
+      placeToolOnCell(droppedTool, cellState);
     });
 
     if (visitedStates.has(stateKey(cellState))) {
@@ -551,7 +579,7 @@ function getStateDescription(state) {
   }
 
   if (isWall(state)) {
-    parts.push("wall");
+    parts.push("Wall");
   }
 
   return parts.join(" - ");
@@ -571,6 +599,7 @@ function updateControls() {
   runEpisodeBtn.disabled = isAnimating || disabledBecauseInvalid;
   trainBtn.disabled = isAnimating || disabledBecauseInvalid;
   resetBtn.disabled = isAnimating;
+  clearGridBtn.disabled = isAnimating;
 
   if (!isAnimating && disabledBecauseInvalid) {
     setStatus(validation.message, "warning");
